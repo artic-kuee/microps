@@ -99,9 +99,11 @@ ip_dump(const uint8_t *data, size_t len)
     fprintf(stderr, "        sum: 0x%04x\n", ntoh16(hdr->sum));
     fprintf(stderr, "        src: %s\n", ip_addr_ntop(hdr->src, addr, sizeof(addr)));
     fprintf(stderr, "        dst: %s\n", ip_addr_ntop(hdr->dst, addr, sizeof(addr)));
+
 #ifdef HEXDUMP
     hexdump(stderr, data, len);
 #endif
+
     funlockfile(stderr);
 
 }
@@ -151,7 +153,7 @@ ip_output_core(struct ip_iface *iface, uint8_t protocol, const uint8_t *data, si
     hdr->sum = 0;
     hdr->sum = cksum16((uint16_t *)hdr, hlen, 0);
     for(int i = 0; i < len; i++){
-        *(uint8_t *)(hdr + hlen + i) = data[i];
+        *(buf + hlen + i) = data[i];
     }
 
 
