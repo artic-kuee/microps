@@ -26,11 +26,19 @@ struct ip_hdr {
     uint8_t options[];
 };
 
+
 const ip_addr_t IP_ADDR_ANY       = 0x00000000; /* 0.0.0.0 */
 const ip_addr_t IP_ADDR_BROADCAST = 0xffffffff; /* 255.255.255.255 */
 /* NOTE: if you want to add/delete the entries after net_run(), you need to protect these lists with a mutex. */
 static struct ip_iface *ifaces;
+static struct ip_protocol *protocols;
+ 
 
+struct ip_protocol {
+    struct ip_protocol *next;
+    uint8_t type;
+    void (*handler)(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct ip_iface *iface);
+};
 
 int
 ip_addr_pton(const char *p, ip_addr_t *n)
@@ -112,7 +120,7 @@ ip_output_device(struct ip_iface *iface, const uint8_t *data, size_t len, ip_add
         }
     }
 
-return net_device_output(NET_IFACE(iface)->dev, NET_IFACE(iface)->dev->type, data, len, hwaddr);
+return net_device_output(NET_IFACE(iface)->dev, NET_PROTOCOL_TYPE_IP, data, len, hwaddr);
 
 
 
@@ -130,16 +138,16 @@ ip_output_core(struct ip_iface *iface, uint8_t protocol, const uint8_t *data, si
     hdr = (struct ip_hdr *)buf;
 
     hlen = IP_HDR_SIZE_MIN;
-    total = len = hlen;
-    hdr->vhl = (IP_VERSION_IPV4 << 4) & (hlen >> 2);
+    total = len + hlen;
+    hdr->vhl = (IP_VERSION_IPV4 << 4) | (hlen >> 2);
     hdr->tos = 0;
     hdr->total = hton16(total);
     hdr->id = hton16(id);
     hdr->offset = hton16(offset);
     hdr->ttl = 255;
     hdr->protocol = protocol;
-    hdr->src = hton32(src);
-    hdr->dst = hton32(dst);
+    hdr->src = src;
+    hdr->dst = dst;
     hdr->sum = 0;
     hdr->sum = cksum16((uint16_t *)hdr, hlen, 0);
     for(int i = 0; i < len; i++){
@@ -266,10 +274,36 @@ ip_iface_select(ip_addr_t addr)
 	return NULL;
 }
 
+/* NOTE: must not be call after net_run() */
+int
+ip_protocol_register(uint8_t type, void (*handler)(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct ip_iface *iface))
+{
+    struct ip_protocol *entry;
+
+    for(entry = protocols; entry; entry = entry->next){
+        if(entry->type == type){
+            errorf("this protocol is  already registered");
+            return -1;
+        }
+    }
+    entry = memory_alloc(sizeof(*entry));
+    if(!entry){
+        errorf("memory_alloc() failure");
+        return -1;
+    }
+    entry->type = type;
+    entry->handler = handler;
+    entry->next = protocols;
+    protocols = entry;
+    infof("registered, type=%u", entry->type);
+    return 0;
+
+}
 
 static void
 ip_input(const uint8_t *data, size_t len, struct net_device *dev)
 {
+    debugf("debug");
     struct ip_hdr *hdr;
     uint8_t v;
     uint16_t hlen, total, offset;
@@ -318,7 +352,13 @@ ip_input(const uint8_t *data, size_t len, struct net_device *dev)
         dev->name, ip_addr_ntop(iface->unicast, addr, sizeof(addr)), hdr->protocol, total);
     ip_dump(data, total);
 
-
+    struct ip_protocol *protocol;
+    for(protocol = protocols; protocol; protocol = protocol->next){
+        if(protocol->type == hdr->protocol){
+            protocol->handler(data + hlen, len - hlen, hdr->src, hdr->dst, iface);
+        }
+    }
+    /* unsupported protocol */
 }
 
 int

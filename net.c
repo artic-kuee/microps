@@ -8,6 +8,7 @@
 #include "util.h"
 #include "net.h"
 #include "ip.h"
+#include "icmp.h"
 
 struct net_protocol {
     struct net_protocol *next;
@@ -167,8 +168,8 @@ int net_input_handler(uint16_t type, const uint8_t *data, size_t len, struct net
     
     struct net_protocol *proto;
     struct net_protocol_queue_entry *entry;
-
     for (proto = protocols; proto; proto = proto->next) {
+        debugf("netinthandler %04x, %04x", proto->type, type);
         if (proto->type == type) {
 	    entry = memory_alloc(sizeof(*entry) + len * sizeof(uint8_t));
 	    if (!entry) {
@@ -177,7 +178,7 @@ int net_input_handler(uint16_t type, const uint8_t *data, size_t len, struct net
 	    }
 	    entry->dev = dev;
 	    entry->len = len;
-	    for(int i = 0; i < len; i++){
+	    for(size_t i = 0; i < len; i++){
 		    entry->data[i] = data[i];
 	    }
 	    if(!queue_push(&(proto->queue),entry)){
@@ -252,6 +253,10 @@ int net_init(void){
     }
     if (ip_init() == -1) {
         errorf("ip_init() failure");
+        return -1;
+    }
+    if(icmp_init() == -1) {
+        errorf("icmp_init() failure");
         return -1;
     }
     infof("initialized");
