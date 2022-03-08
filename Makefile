@@ -7,6 +7,8 @@ OBJS = util.o \
        net.o \
        ip.o \
 	   icmp.o \
+	   ether.o \
+	   arp.o \
 
 TESTS = test/step0.exe \
 		test/step1.exe \
@@ -20,6 +22,11 @@ TESTS = test/step0.exe \
 		test/step9.exe \
 		test/step10.exe \
 		test/step11.exe \
+		test/step12.exe \
+		test/step13.exe \
+		test/step14.exe \
+		test/step15.exe \
+		test/step16.exe \
 
 
 CFLAGS := $(CFLAGS) -g -W -Wall -Wno-unused-parameter -iquote .
@@ -28,6 +35,8 @@ ifeq ($(shell uname),Linux)
   # Linux specific settings
   BASE = platform/linux
   CFLAGS := $(CFLAGS) -pthread -iquote $(BASE)
+  LDFLAGS := $(LDFLAGS) -lrt
+  DRIVERS := $(DRIVERS) $(BASE)/driver/ether_tap.o
   OBJS := $(OBJS) $(BASE)/intr.o
 endif
 
