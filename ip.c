@@ -89,14 +89,21 @@ static struct ip_route *
 ip_route_lookup(ip_addr_t dst)
 {
     struct ip_route *route, *candidate = NULL;
+    char addr[IP_ADDR_STR_LEN];
+    debugf("lookup for addr");
+    fprintf(stderr, "        dst: %s\n", ip_addr_ntop(dst, addr, sizeof(addr)));
 
     for (route = routes; route; route = route->next) {
+        fprintf(stderr, "    network: %s\n", ip_addr_ntop(route->network, addr, sizeof(addr)));
+        fprintf(stderr, "    netmask: %s\n", ip_addr_ntop(route->netmask, addr, sizeof(addr)));
         if ((dst & route->netmask) == route->network) {
             if (!candidate || ntoh32(candidate->netmask) < ntoh32(route->netmask)) {
                 candidate = route;
             }
         }
     }
+    fprintf(stderr, "  candidate: %s\n", ip_addr_ntop(candidate->network, addr, sizeof(addr)));
+    fprintf(stderr, "    netmask: %s\n", ip_addr_ntop(candidate->netmask, addr, sizeof(addr)));
     return candidate;
 
 }
@@ -164,6 +171,40 @@ ip_addr_ntop(ip_addr_t n, char *p, size_t size)
 
     u8 = (uint8_t *)&n;
     snprintf(p, size, "%d.%d.%d.%d", u8[0], u8[1], u8[2], u8[3]);
+    return p;
+}
+
+int
+ip_endpoint_pton(const char *p, struct ip_endpoint *n)
+{
+    char *sep;
+    char addr[IP_ADDR_STR_LEN] = {};
+    long int port;
+
+    sep = strrchr(p, ':');
+    if (!sep) {
+        return -1;
+    }
+    memcpy(addr, p, sep - p);
+    if (ip_addr_pton(addr, &n->addr) == -1) {
+        return -1;
+    }
+    port = strtol(sep+1, NULL, 10);
+    if (port <= 0 || port > UINT16_MAX) {
+        return -1;
+    }
+    n->port = hton16(port);
+    return 0;
+}
+
+char *
+ip_endpoint_ntop(const struct ip_endpoint *n, char *p, size_t size)
+{
+    size_t offset;
+
+    ip_addr_ntop(n->addr, p, size);
+    offset = strlen(p);
+    snprintf(p + offset, size - offset, ":%d", ntoh16(n->port));
     return p;
 }
 
@@ -296,6 +337,7 @@ ip_output(uint8_t protocol, const uint8_t *data, size_t len, ip_addr_t src, ip_a
     iface = route->iface;
     if (src != IP_ADDR_ANY && src != iface->unicast) {
         errorf("unable to output with specified source address, addr=%s", ip_addr_ntop(src, addr, sizeof(addr)));
+        errorf("%s", ip_addr_ntop(iface->unicast, addr,sizeof(addr)));
         return -1;
     }
     nexthop = (route->nexthop != IP_ADDR_ANY) ? route->nexthop : dst;
@@ -352,7 +394,7 @@ ip_iface_register(struct net_device *dev, struct ip_iface *iface)
 	    errorf("net_device_add_iface() failed");
 	    return -1;
     }
-    if(!ip_route_add(iface->unicast & iface->unicast, iface->netmask, iface->broadcast, iface)) {
+    if(!ip_route_add(iface->unicast & iface->netmask, iface->netmask, iface->broadcast, iface)) {
         errorf("ip_route_add failed");
 
         return -1;
