@@ -89,21 +89,14 @@ static struct ip_route *
 ip_route_lookup(ip_addr_t dst)
 {
     struct ip_route *route, *candidate = NULL;
-    char addr[IP_ADDR_STR_LEN];
-    debugf("lookup for addr");
-    fprintf(stderr, "        dst: %s\n", ip_addr_ntop(dst, addr, sizeof(addr)));
 
     for (route = routes; route; route = route->next) {
-        fprintf(stderr, "    network: %s\n", ip_addr_ntop(route->network, addr, sizeof(addr)));
-        fprintf(stderr, "    netmask: %s\n", ip_addr_ntop(route->netmask, addr, sizeof(addr)));
         if ((dst & route->netmask) == route->network) {
             if (!candidate || ntoh32(candidate->netmask) < ntoh32(route->netmask)) {
                 candidate = route;
             }
         }
     }
-    fprintf(stderr, "  candidate: %s\n", ip_addr_ntop(candidate->network, addr, sizeof(addr)));
-    fprintf(stderr, "    netmask: %s\n", ip_addr_ntop(candidate->netmask, addr, sizeof(addr)));
     return candidate;
 
 }
@@ -248,7 +241,12 @@ ip_output_device(struct ip_iface *iface, const uint8_t *data, size_t len, ip_add
     uint8_t hwaddr[NET_DEVICE_ADDR_LEN] = {};
     int ret;
 
+    char addr[IP_ADDR_STR_LEN];
+
     if (NET_IFACE(iface)->dev->flags & NET_DEVICE_FLAG_NEED_ARP) {
+        fprintf(stderr, "        dst: %s\n", ip_addr_ntop(dst, addr, sizeof(addr)));
+        fprintf(stderr, " fbroadcast: %s\n", ip_addr_ntop(iface->broadcast, addr, sizeof(addr)));
+        fprintf(stderr, " gbroadcast: %s\n", ip_addr_ntop(IP_ADDR_BROADCAST, addr, sizeof(addr)));
         if (dst == iface->broadcast || dst == IP_ADDR_BROADCAST) {
             memcpy(hwaddr, NET_IFACE(iface)->dev->broadcast, NET_IFACE(iface)->dev->alen);
         } else {
