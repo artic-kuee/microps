@@ -95,7 +95,7 @@ icmp_input(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct
         return;
     }
     
-    if(cksum16(data, len, 0)){
+    if(cksum16((uint16_t *)hdr, len, 0)){
         errorf("checksum failed");
         return;
     }
@@ -134,8 +134,9 @@ icmp_output(uint8_t type, uint8_t code, uint32_t values, const uint8_t *data, si
     for(size_t i = 0; i < len; i++){
         *(buf + ICMP_HDR_SIZE + i) = data[i];
     }
-    hdr->sum = cksum16((uint16_t *)hdr, len + ICMP_HDR_SIZE, 0);
-    debugf("%d",cksum16((uint16_t *)hdr, len + ICMP_HDR_SIZE, 0));
+    msg_len = len + ICMP_HDR_SIZE;
+    hdr->sum = cksum16((uint16_t *)hdr, msg_len, 0);
+    debugf("%d",cksum16((uint16_t *)hdr, msg_len, 0));
 
     debugf("%s => %s, len=%zu", ip_addr_ntop(src, addr1, sizeof(addr1)), ip_addr_ntop(dst, addr2, sizeof(addr2)), msg_len);
     icmp_dump((uint8_t *)hdr, msg_len);

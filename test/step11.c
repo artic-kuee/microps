@@ -71,6 +71,7 @@ main(int argc, char *argv[])
         return -1;
     }
     ip_addr_pton(LOOPBACK_IP_ADDR, &src);
+    id = getpid();
     dst = src;
     while (!terminate) {
         if (icmp_output(ICMP_TYPE_ECHO, 0, hton32(id << 16 | ++seq), test_data + offset, sizeof(test_data) - offset, src, dst) == -1) {

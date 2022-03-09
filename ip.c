@@ -250,7 +250,7 @@ ip_output_device(struct ip_iface *iface, const uint8_t *data, size_t len, ip_add
         if (dst == iface->broadcast || dst == IP_ADDR_BROADCAST) {
             memcpy(hwaddr, NET_IFACE(iface)->dev->broadcast, NET_IFACE(iface)->dev->alen);
         } else {
-            ret = arp_resolve(iface, dst, hwaddr);
+            ret = arp_resolve(NET_IFACE(iface), dst, hwaddr);
             if(ret != ARP_RESOLVE_FOUND){
                 return ret;
             }
@@ -287,7 +287,7 @@ ip_output_core(struct ip_iface *iface, uint8_t protocol, const uint8_t *data, si
     hdr->dst = dst;
     hdr->sum = 0;
     hdr->sum = cksum16((uint16_t *)hdr, hlen, 0);
-    for(int i = 0; i < len; i++){
+    for(int i = 0; i < (int)len; i++){
         *(buf + hlen + i) = data[i];
     }
 
@@ -449,7 +449,6 @@ ip_input(const uint8_t *data, size_t len, struct net_device *dev)
 {
     debugf("debug");
     struct ip_hdr *hdr;
-    uint8_t v;
     uint16_t hlen, total, offset;
     struct ip_iface *iface;
     char addr[IP_ADDR_STR_LEN];

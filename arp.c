@@ -197,14 +197,13 @@ arp_request(struct net_iface *iface, ip_addr_t tpa)
     request.hdr.pln = IP_ADDR_LEN;
     request.hdr.pro = hton16(ARP_PRO_IP);
     request.hdr.op = hton16(ARP_OP_REQUEST);
-    ip_addr_t broadcast = IP_ADDR_BROADCAST;
-    memcpy(&(request.spa), &(((struct ip_iface *)iface)->unicast), IP_ADDR_LEN);
-    memcpy(&(request.sha), &(iface->dev->addr), ETHER_ADDR_LEN); 
-    memcpy(&(request.tpa), &tpa, IP_ADDR_LEN);
-    memcpy(&(request.tha), &broadcast, ETHER_ADDR_LEN);
+    memcpy(request.spa, &(((struct ip_iface *)iface)->unicast), IP_ADDR_LEN);
+    memcpy(request.sha, iface->dev->addr, ETHER_ADDR_LEN);
+    memcpy(request.tpa, &tpa, IP_ADDR_LEN);
+    memset(request.tha, 0, ETHER_ADDR_LEN);
     debugf("dev=%s, len=%zu", iface->dev->name, sizeof(request));
     arp_dump((uint8_t *)&request, sizeof(request));
-    return net_device_output(iface->dev, ETHER_TYPE_ARP, (uint8_t *)&request, sizeof(request), &broadcast);
+    return net_device_output(iface->dev, ETHER_TYPE_ARP, (uint8_t *)&request, sizeof(request), iface->dev->broadcast);
 
 }
 
@@ -213,10 +212,10 @@ arp_reply(struct net_iface *iface, const uint8_t *tha, ip_addr_t tpa, const uint
 {
     struct arp_ether_ip reply;
 
-    memcpy(&(reply.spa), &(((struct ip_iface *)iface)->unicast), IP_ADDR_LEN);
-    memcpy(&(reply.sha), &(iface->dev->addr), ETHER_ADDR_LEN); 
-    memcpy(&(reply.tpa), &tpa, IP_ADDR_LEN);
-    memcpy(&(reply.tha), tha, ETHER_ADDR_LEN);
+    memcpy(reply.spa, &(((struct ip_iface *)iface)->unicast), IP_ADDR_LEN);
+    memcpy(reply.sha, iface->dev->addr, ETHER_ADDR_LEN);
+    memcpy(reply.tpa, &tpa, IP_ADDR_LEN);
+    memcpy(reply.tha, tha, ETHER_ADDR_LEN);
     reply.hdr.hln = ETHER_ADDR_LEN;
     reply.hdr.pln = IP_ADDR_LEN;
     reply.hdr.hrd = hton16(ARP_HRD_ETHER);
@@ -257,7 +256,7 @@ arp_input(const uint8_t *data, size_t len, struct net_device *dev)
     memcpy(&spa, msg->spa, sizeof(spa));
     memcpy(&tpa, msg->tpa, sizeof(tpa));
     mutex_lock(&mutex);
-    if (arp_cache_update(spa, &(msg->sha))) {
+    if (arp_cache_update(spa, msg->sha)) {
         /* updated */
         merge = 1;
     }
@@ -267,12 +266,12 @@ arp_input(const uint8_t *data, size_t len, struct net_device *dev)
     if (iface && ((struct ip_iface *)iface)->unicast == tpa) {
         if (!merge) {
             mutex_lock(&mutex);
-            arp_cache_insert(spa, &(msg->sha));
+            arp_cache_insert(spa, msg->sha);
             mutex_unlock(&mutex);
         }
 
         if(ntoh16(msg->hdr.op) == ARP_OP_REQUEST){
-            arp_reply(iface, &(msg->sha),spa, &(msg->sha));
+            arp_reply(iface, msg->sha,spa, msg->sha);
         }
 
 
@@ -307,7 +306,7 @@ arp_resolve(struct net_iface *iface, ip_addr_t pa, uint8_t *ha)
         cache->pa = pa;
         if(gettimeofday(&(cache->timestamp), NULL)){
             errorf("gettimeofday() failure");
-            return NULL;
+            return ARP_RESOLVE_ERROR;
         }
         mutex_unlock(&mutex);arp_request(iface, pa);
         return ARP_RESOLVE_INCOMPLETE;

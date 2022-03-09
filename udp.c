@@ -201,10 +201,11 @@ udp_input(const uint8_t *data, size_t len, ip_addr_t src, ip_addr_t dst, struct 
         errorf("memory_alloc failed");
         return;
     }
-    entry->foreign.addr = dst;
-    entry->foreign.port = hdr->dst;
-    entry->len = len;
-    memcpy(&(entry->data), data + sizeof(*hdr), len - sizeof(*hdr));
+    entry->foreign.addr = src;
+    entry->foreign.port = hdr->src;
+    entry->len = len - sizeof(*hdr);
+    memcpy(entry->data, hdr+1, len - sizeof(*hdr));
+
     queue_push(&pcb->queue, entry);
 
 
@@ -229,17 +230,20 @@ udp_output(struct ip_endpoint *src, struct ip_endpoint *dst, const  uint8_t *dat
         return -1;
     }
     hdr = (struct udp_hdr *)buf;
+    total = len + sizeof(*hdr);
     pseudo.protocol = IP_PROTOCOL_UDP;
     pseudo.src = src->addr;
     pseudo.dst = dst->addr;
-    pseudo.len =  hton16(len + sizeof(*hdr));
+    pseudo.len =  hton16(total);
     pseudo.zero = 0;
     psum = ~cksum16((uint16_t *)&pseudo, sizeof(pseudo), 0);
     hdr->src = src->port;
     hdr->dst = dst->port;
-    hdr->len = hton16(len + sizeof(*hdr));
+    hdr->len = hton16(total);
     hdr->sum = 0;
     hdr->sum = cksum16((uint16_t *)hdr, len, psum);
+    memcpy(hdr+1, data, len);
+    hdr->sum = cksum16((uint16_t *)hdr, total, psum);
 
 
     debugf("%s => %s, len=%zu (payload=%zu)",
@@ -282,7 +286,7 @@ udp_open(void)
 int
 udp_close(int id)
 {
-    struct udp_pcp *pcb;
+    struct udp_pcb *pcb;
     pcb = udp_pcb_get(id);
     if(!pcb){
         errorf("pcb not found");
@@ -297,7 +301,6 @@ udp_bind(int id, struct ip_endpoint *local)
 {
      struct udp_pcb *pcb, *exist;
     char ep1[IP_ENDPOINT_STR_LEN];
-    char ep2[IP_ENDPOINT_STR_LEN];
 
     mutex_lock(&mutex);
 
